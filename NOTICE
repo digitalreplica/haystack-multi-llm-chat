@@ -1,0 +1,16 @@
+Haystack Multi-LLM Chat
+Copyright (C) 2025 DigitalReplica
+
+This software is licensed under the GNU Affero General Public License version 3
+or any later version (AGPL-3.0-or-later). A copy of the license is included in
+the LICENSE file.
+
+This software includes the following third-party components:
+
+- Streamlit (Apache License 2.0)
+- Haystack (Apache License 2.0)
+- AWS Boto3 (Apache License 2.0)
+- Python Requests (Apache License 2.0)
+
+For full license details of these components, please see their respective websites
+or documentation.

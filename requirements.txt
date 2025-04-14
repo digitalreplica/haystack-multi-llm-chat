@@ -1,0 +1,13 @@
+# Core dependencies
+streamlit>=1.44.0
+haystack-ai>=2.12.0
+
+# Provider integrations
+amazon-bedrock-haystack>=3.5.0  # For AWS Bedrock integration
+ollama-haystack>=2.4.0  # For Ollama integration
+
+# AWS dependencies
+boto3>=1.37.0
+
+# Utility libraries
+requests>=2.31.0
