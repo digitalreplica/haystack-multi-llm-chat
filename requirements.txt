@@ -11,3 +11,6 @@ boto3>=1.37.0
 
 # Utility libraries
 requests>=2.31.0
+
+# Development dependencies
+watchdog>=6.0.0  # For file system monitoring during development
