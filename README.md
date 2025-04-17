@@ -131,6 +131,20 @@ The Haystack Multi-LLM Chat application is a Streamlit-based web application tha
   - Chat preview display
   - Session restoration logic
 
+#### 2.1.6 Search Interface (`05_Search.py`)
+- **Purpose**: Search through document content and add relevant snippets to chat
+- **Functionality**:
+  - Index markdown files from specified directories
+  - Execute keyword searches across indexed content
+  - Select specific snippets or entire documents from search results
+  - Format and include selected content in conversation
+- **Key Components**:
+  - Document indexing with BM25 retriever
+  - Document chunking for large files
+  - Search interface with result highlighting
+  - Selection management for snippets and full documents
+  - Preview of formatted content
+
 ### 2.2 Session State Management
 
 The application uses Streamlit's session state to maintain data across page navigation and reruns:
@@ -147,6 +161,14 @@ The application uses Streamlit's session state to maintain data across page navi
 | `document_instructions` | Instructions for document handling | Documents | Documents, Chat |
 | `streaming_[model_id]` | Buffer for streaming responses | Chat | Chat |
 | `placeholder_[model_id]` | UI placeholder for streaming | Chat | Chat |
+| `search_document_store` | In-memory document store for search | Search | Search |
+| `search_retriever` | BM25 retriever for document search | Search | Search |
+| `indexed_files` | Set of files that have been indexed | Search | Search |
+| `selected_search_results` | List of selected search results | Search | Search, Chat |
+| `ignored_directories` | Directories to skip when indexing | Search | Search |
+| `search_results_count` | Number of results to display | Search | Search |
+| `last_search_results` | Results from most recent search | Search | Search |
+| `last_search_query` | Most recent search query | Search | Search |
 
 ### 2.3 External API Integration
 
@@ -169,6 +191,16 @@ The application uses Streamlit's session state to maintain data across page navi
   2. Convert messages to format expected by Ollama
   3. Send request with streaming enabled
   4. Process streaming chunks in callback
+
+#### 2.3.3 Haystack Document Store and Retriever
+- **Integration Component**: `InMemoryDocumentStore` and `InMemoryBM25Retriever`
+- **Authentication**: None (in-memory components)
+- **Document Processing**: Chunking large documents into manageable segments
+- **Request Flow**:
+  1. Index documents into document store
+  2. Create retriever connected to document store
+  3. Execute search queries through retriever
+  4. Process and display search results
 
 ## 3. Design Patterns and Decisions
 
@@ -243,6 +275,29 @@ Documents are integrated into the conversation through:
    - Custom instructions are added before document content
    - This guides the model on how to use the documents
 
+4. **Document Search and Selection**:
+   - Documents can be browsed directly or discovered through search
+   - Search allows finding specific content within large document collections
+   - Both snippets and full documents can be selected from search results
+
+### 3.5 Search Implementation
+
+The document search functionality is implemented through:
+
+1. **Document Indexing**:
+   - Markdown files are indexed using Haystack's document store
+   - Large documents are automatically chunked into smaller segments
+   - Both snippets and full documents are stored for retrieval
+
+2. **BM25 Retrieval**:
+   - Keyword search uses the BM25 algorithm for relevance ranking
+   - Results are filtered to show document snippets by default
+
+3. **Result Selection Mechanism**:
+   - Users can add specific snippets or entire documents to their selection
+   - Selected items are formatted according to user preferences
+   - Selected content is included in the first message to the model
+
 ## 4. Directory structure
 Haystack-MultiLLM-Chat/
 ├── .github/                      # GitHub-specific files
@@ -254,6 +309,7 @@ Haystack-MultiLLM-Chat/
 │   │   ├── 02_Documents.py
 │   │   ├── 03_Chat.py
 │   │   └── 04_Saved_Chats.py
+│   │   └── 05_Search.py         # Document search functionality
 │   ├── utils/                    # Utility functions
 │   ├── components/               # Reusable UI components
 │   └── providers/                # Provider-specific implementations
