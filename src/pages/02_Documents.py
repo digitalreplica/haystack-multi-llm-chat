@@ -1,4 +1,4 @@
-# pages/04_Documents.py
+# pages/02_Documents.py
 
 import streamlit as st
 import os
@@ -30,19 +30,41 @@ if "document_instructions" not in st.session_state:
 if "base_folder" not in st.session_state:
     st.session_state.base_folder = os.getcwd()  # Default to current working directory
 
+# Initialize session state for ignore list if it doesn't exist
+if "ignored_directories" not in st.session_state:
+    st.session_state.ignored_directories = {
+        '.git', '.venv', 'venv', '__pycache__', 'node_modules',
+        '.idea', '.vscode', '.ipynb_checkpoints', 'build', 'dist',
+        'env', '.env', '.pytest_cache', '.mypy_cache', '.tox',
+        'site-packages', '.github'
+    }
+
+if "show_ignored_dirs" not in st.session_state:
+    st.session_state.show_ignored_dirs = False
+
 # Function to list files in a directory
-def list_files(directory, recursive=False):
+def list_files(directory, recursive=False, show_ignored=False):
     try:
         directory_path = pathlib.Path(directory)
         if not directory_path.exists() or not directory_path.is_dir():
             return [], f"Error: '{directory}' is not a valid directory"
 
+        # Get ignore list from session state
+        ignore_dirs = set() if show_ignored else st.session_state.ignored_directories
+
+        files = []
+
         if recursive:
-            # Use rglob for recursive search
-            files = [str(p.relative_to(directory_path)) for p in directory_path.rglob("*") if p.is_file()]
+            # Use manual traversal for recursive search with ignore logic
+            for path in directory_path.rglob('*'):
+                # Check if any parent directory is in the ignore list
+                should_ignore = any(ignore_dir in path.parts for ignore_dir in ignore_dirs)
+                if path.is_file() and not should_ignore:
+                    files.append(str(path.relative_to(directory_path)))
         else:
             # Use glob for non-recursive search
-            files = [str(p.relative_to(directory_path)) for p in directory_path.glob("*") if p.is_file()]
+            files = [str(p.relative_to(directory_path)) for p in directory_path.glob("*") 
+                    if p.is_file() and p.name not in ignore_dirs]
 
         # Sort alphabetically
         files.sort()
@@ -151,6 +173,13 @@ with col1:
 
 with col2:
     recursive = st.checkbox("Search Recursively", value=False)
+    show_ignored = st.checkbox("Show Ignored Directories", 
+                               value=st.session_state.show_ignored_dirs,
+                               help="Show files in directories that are normally ignored")
+
+    # Update session state if changed
+    if show_ignored != st.session_state.show_ignored_dirs:
+        st.session_state.show_ignored_dirs = show_ignored
 
 # Update base folder in session state if changed
 if base_folder != st.session_state.base_folder:
@@ -162,7 +191,7 @@ if st.button("Refresh File List", type="primary"):
     st.session_state.base_folder = base_folder  # Update in case it changed
 
 # List files in the directory
-files, error = list_files(st.session_state.base_folder, recursive)
+files, error = list_files(st.session_state.base_folder, recursive, st.session_state.show_ignored_dirs)
 
 if error:
     st.error(error)
@@ -342,3 +371,23 @@ with st.sidebar:
 
     if est_tokens > 8000:
         st.warning("⚠️ Selected documents may exceed context limits of some models.")
+
+    # Advanced settings expander for ignored directories
+    with st.expander("Advanced Settings"):
+        st.subheader("Ignored Directories")
+        st.caption("These directories are skipped when browsing files")
+
+        # Convert set to sorted list for display
+        ignored_dirs_list = sorted(list(st.session_state.ignored_directories))
+        ignored_dirs_text = st.text_area(
+            "One directory name per line:", 
+            value="\n".join(ignored_dirs_list),
+            height=150
+        )
+
+        # Update the ignored directories if changed
+        if st.button("Update Ignored Directories"):
+            # Split by newlines and filter out empty lines
+            new_ignored_dirs = {dir.strip() for dir in ignored_dirs_text.split("\n") if dir.strip()}
+            st.session_state.ignored_directories = new_ignored_dirs
+            st.success("Ignored directories updated!")
