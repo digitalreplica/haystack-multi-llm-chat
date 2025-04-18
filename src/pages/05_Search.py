@@ -20,6 +20,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Get the ConfigManager instance
+config = st.session_state.config_manager
+
 # Initialize session state for search if it doesn't exist
 if "selected_search_results" not in st.session_state:
     st.session_state.selected_search_results = []  # List of {path, content, timestamp, is_snippet}
@@ -34,32 +37,9 @@ if "indexed_files" not in st.session_state:
     st.session_state.indexed_files = set()  # Track which files have been indexed
 
 if "base_folder" not in st.session_state:
-    st.session_state.base_folder = os.getcwd()  # Default to current working directory
-
-if "document_format" not in st.session_state:
-    st.session_state.document_format = "xml"  # Default format
-
-if "document_instructions" not in st.session_state:
-    st.session_state.document_instructions = (
-        "I'm sharing some documents with you below. Please help me understand, analyze, "
-        "or modify these documents based on my questions. Reference the document names "
-        "when discussing specific parts."
-    )
-
-# Initialize session state for ignore list if it doesn't exist
-if "ignored_directories" not in st.session_state:
-    st.session_state.ignored_directories = {
-        '.git', '.venv', 'venv', '__pycache__', 'node_modules',
-        '.idea', '.vscode', '.ipynb_checkpoints', 'build', 'dist',
-        'env', '.env', '.pytest_cache', '.mypy_cache', '.tox',
-        'site-packages', '.github'
-    }
-
-if "show_ignored_dirs" not in st.session_state:
-    st.session_state.show_ignored_dirs = False
-
-if "search_results_count" not in st.session_state:
-    st.session_state.search_results_count = 10  # Default number of results to show
+    # Get base directory from config instead of hardcoding
+    base_dir = config.get_global("base_directories", {}).get("search", "./data/search")
+    st.session_state.base_folder = base_dir
 
 if "last_search_results" not in st.session_state:
     st.session_state.last_search_results = []
@@ -132,8 +112,8 @@ def list_markdown_files(directory: str, recursive: bool = False, show_ignored: b
         if not directory_path.exists() or not directory_path.is_dir():
             return [], f"Error: '{directory}' is not a valid directory"
 
-        # Get ignore list from session state
-        ignore_dirs = set() if show_ignored else st.session_state.ignored_directories
+        # Get ignore list from config
+        ignore_dirs = set() if show_ignored else set(config.get_global("ignored_directories", []))
 
         files = []
 
@@ -342,7 +322,6 @@ def remove_search_result(index: int):
     if 0 <= index < len(st.session_state.selected_search_results):
         st.session_state.selected_search_results.pop(index)
 
-# Function to generate preview of formatted documents
 def generate_preview() -> str:
     """
     Generate a preview of the selected search results in the chosen format.
@@ -350,8 +329,21 @@ def generate_preview() -> str:
     if not st.session_state.selected_search_results:
         return "No documents selected."
 
-    format_type = st.session_state.document_format
-    preview = st.session_state.document_instructions + "\n\n"
+    # Get format from config with fallback
+    format_type = config.get_page_config_with_fallback("search", "format", "documents", "format", "xml")
+
+    # Get instructions from config with fallback
+    instructions = config.get_page_config_with_fallback(
+        "search", 
+        "instructions", 
+        "documents", 
+        "instructions",
+        "I'm sharing some documents with you below. Please help me understand, analyze, "
+        "or modify these documents based on my questions. Reference the document names "
+        "when discussing specific parts."
+    )
+
+    preview = instructions + "\n\n"
 
     for doc in st.session_state.selected_search_results:
         # For snippets, include a note in the document name
@@ -387,10 +379,23 @@ with col1:
     )
 
 with col2:
-    recursive = st.checkbox("Search Recursively", value=True)
+    # Get recursive value from config with fallback
+    default_recursive = config.get_page_config_with_fallback("search", "recursive", None, None, False)
+    recursive = st.checkbox("Search Recursively", value=default_recursive)
+
+    # Update config if changed
+    if recursive != default_recursive:
+        config.set_page_config("search", "recursive", recursive)
+
+    # Get show_ignored_dirs value from config with fallback
+    default_show_ignored = config.get_page_config_with_fallback("search", "show_ignored_dirs", None, None, False)
     show_ignored = st.checkbox("Show Ignored Directories", 
-                               value=st.session_state.show_ignored_dirs,
-                               help="Show files in directories that are normally ignored")
+                              value=default_show_ignored,
+                              help="Show files in directories that are normally ignored")
+
+    # Update config if changed
+    if show_ignored != default_show_ignored:
+        config.set_page_config("search", "show_ignored_dirs", show_ignored)
 
 # Update base folder in session state if changed
 if base_folder != st.session_state.base_folder:
@@ -400,15 +405,11 @@ if base_folder != st.session_state.base_folder:
     st.session_state.search_document_store = None
     st.session_state.search_retriever = None
 
-# Update show_ignored in session state if changed
-if show_ignored != st.session_state.show_ignored_dirs:
-    st.session_state.show_ignored_dirs = show_ignored
-
 # Index files button
 if st.button("Index Markdown Files", type="primary"):
     with st.spinner("Indexing markdown files..."):
         # List markdown files in the directory
-        files, error = list_markdown_files(st.session_state.base_folder, recursive, st.session_state.show_ignored_dirs)
+        files, error = list_markdown_files(st.session_state.base_folder, recursive, show_ignored)
 
         if error:
             st.error(error)
@@ -435,17 +436,18 @@ with col_query:
     search_query = st.text_input("Search Query", placeholder="Enter search terms...")
 
 with col_count:
+    # Get results count from config with fallback
+    default_results_count = config.get_page_config_with_fallback("search", "results_count", None, None, 10)
     results_count = st.number_input(
         "Max Results", 
         min_value=1, 
         max_value=50, 
-        value=st.session_state.search_results_count
+        value=default_results_count
     )
-    # Update session state if changed
-    if results_count != st.session_state.search_results_count:
-        st.session_state.search_results_count = results_count
 
-# Replace the search button and results display section with this:
+    # Update config if changed
+    if results_count != default_results_count:
+        config.set_page_config("search", "results_count", results_count)
 
 # Search button
 search_clicked = st.button("Search", type="primary", disabled=not search_query or not st.session_state.search_retriever)
@@ -546,38 +548,55 @@ else:
 st.markdown("---")
 st.subheader("Document Formatting")
 
-# Format selection
-format_options = {
+# Get format options from config with fallback
+format_options = config.get_global("documents.format_options", {
     "xml": "XML Tags (<document name=\"filename\">content</document>)",
     "markdown": "Markdown (```filename\ncontent```)",
     "simple": "Simple Text (--- filename ---\ncontent)"
-}
+})
 
+# Get current format from config with fallback
+current_format = config.get_page_config_with_fallback("search", "format", "documents", "format", "xml")
 selected_format = st.radio(
     "Select document format style:",
     options=list(format_options.keys()),
-    format_func=lambda x: format_options[x],
-    index=list(format_options.keys()).index(st.session_state.document_format),
+    format_func=lambda x: format_options.get(x, x),
+    index=list(format_options.keys()).index(current_format) if current_format in format_options else 0,
     horizontal=True
 )
 
-# Update format in session state if changed
-if selected_format != st.session_state.document_format:
-    st.session_state.document_format = selected_format
+# Update format in config if changed
+if selected_format != current_format:
+    # Update in both places to ensure consistency
+    config.set_page_config("search", "format", selected_format)
+    #config.set_global("documents.format", selected_format)
 
 # Document instructions
 st.subheader("Document Instructions")
 st.caption("This text will be prepended to the documents when sending to the model")
 
+# Get instructions from config with fallback
+current_instructions = config.get_page_config_with_fallback(
+    "search", 
+    "instructions", 
+    "documents", 
+    "instructions",
+    "I'm sharing some documents with you below. Please help me understand, analyze, "
+    "or modify these documents based on my questions. Reference the document names "
+    "when discussing specific parts."
+)
+
 document_instructions = st.text_area(
     "Instructions for the AI",
-    value=st.session_state.document_instructions,
+    value=current_instructions,
     height=100
 )
 
-# Update instructions in session state if changed
-if document_instructions != st.session_state.document_instructions:
-    st.session_state.document_instructions = document_instructions
+# Update instructions in config if changed
+if document_instructions != current_instructions:
+    # Update in both places to ensure consistency
+    config.set_page_config("search", "instructions", document_instructions)
+    #config.set_global("documents.instructions", document_instructions)
 
 # Preview section
 st.markdown("---")
@@ -676,17 +695,17 @@ with st.sidebar:
         st.subheader("Ignored Directories")
         st.caption("These directories are skipped when browsing files")
 
-        # Convert set to sorted list for display
-        ignored_dirs_list = sorted(list(st.session_state.ignored_directories))
+        # Get ignored directories from config
+        ignored_dirs_list = config.get_global("ignored_directories", [])
         ignored_dirs_text = st.text_area(
             "One directory name per line:", 
-            value="\n".join(ignored_dirs_list),
+            value="\n".join(sorted(ignored_dirs_list)),
             height=150
         )
 
         # Update the ignored directories if changed
         if st.button("Update Ignored Directories"):
             # Split by newlines and filter out empty lines
-            new_ignored_dirs = {dir.strip() for dir in ignored_dirs_text.split("\n") if dir.strip()}
-            st.session_state.ignored_directories = new_ignored_dirs
+            new_ignored_dirs = [dir.strip() for dir in ignored_dirs_text.split("\n") if dir.strip()]
+            config.set_global("ignored_directories", new_ignored_dirs)
             st.success("Ignored directories updated!")

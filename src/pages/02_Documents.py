@@ -13,34 +13,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Get the ConfigManager instance
+config = st.session_state.config_manager
+
 # Initialize session state for documents if it doesn't exist
 if "selected_documents" not in st.session_state:
     st.session_state.selected_documents = []  # List of {path, content, timestamp}
-
-if "document_format" not in st.session_state:
-    st.session_state.document_format = "xml"  # Default format
-
-if "document_instructions" not in st.session_state:
-    st.session_state.document_instructions = (
-        "I'm sharing some documents with you below. Please help me understand, analyze, "
-        "or modify these documents based on my questions. Reference the document names "
-        "when discussing specific parts."
-    )
-
-if "base_folder" not in st.session_state:
-    st.session_state.base_folder = os.getcwd()  # Default to current working directory
-
-# Initialize session state for ignore list if it doesn't exist
-if "ignored_directories" not in st.session_state:
-    st.session_state.ignored_directories = {
-        '.git', '.venv', 'venv', '__pycache__', 'node_modules',
-        '.idea', '.vscode', '.ipynb_checkpoints', 'build', 'dist',
-        'env', '.env', '.pytest_cache', '.mypy_cache', '.tox',
-        'site-packages', '.github'
-    }
-
-if "show_ignored_dirs" not in st.session_state:
-    st.session_state.show_ignored_dirs = False
 
 # Function to list files in a directory
 def list_files(directory, recursive=False, show_ignored=False):
@@ -49,8 +27,8 @@ def list_files(directory, recursive=False, show_ignored=False):
         if not directory_path.exists() or not directory_path.is_dir():
             return [], f"Error: '{directory}' is not a valid directory"
 
-        # Get ignore list from session state
-        ignore_dirs = set() if show_ignored else st.session_state.ignored_directories
+        # Get ignore list from config
+        ignore_dirs = set() if show_ignored else set(config.get_global("ignored_directories", []))
 
         files = []
 
@@ -94,19 +72,24 @@ def format_document(name, content, format_type):
     elif format_type == "markdown":
         # Try to determine language for syntax highlighting
         extension = pathlib.Path(name).suffix.lower()
-        lang_map = {
-            '.py': 'python',
-            '.js': 'javascript',
-            '.html': 'html',
-            '.css': 'css',
-            '.java': 'java',
-            '.cpp': 'cpp', '.c': 'c',
-            '.json': 'json',
-            '.md': 'markdown',
-            '.sh': 'bash',
-            '.sql': 'sql',
-            '.txt': ''
-        }
+        # Get language mappings from config
+        lang_map = config.get_page_config(
+            "documents", 
+            "language_mappings", 
+            {
+                '.py': 'python',
+                '.js': 'javascript',
+                '.html': 'html',
+                '.css': 'css',
+                '.java': 'java',
+                '.cpp': 'cpp', '.c': 'c',
+                '.json': 'json',
+                '.md': 'markdown',
+                '.sh': 'bash',
+                '.sql': 'sql',
+                '.txt': ''
+            }
+        )
         lang = lang_map.get(extension, '')
 
         return f'```{lang} {name}\n{content}\n```'
@@ -120,8 +103,19 @@ def generate_preview():
     if not st.session_state.selected_documents:
         return "No documents selected."
 
-    format_type = st.session_state.document_format
-    preview = st.session_state.document_instructions + "\n\n"
+    # Get format with fallback to global documents section
+    format_type = config.get_page_config_with_fallback("documents", "format", "documents", "format", "xml")
+
+    # Get instructions with fallback to global documents section
+    instructions = config.get_page_config_with_fallback(
+        "documents", 
+        "instructions", 
+        "documents",
+        "instructions",
+        ""
+    )
+
+    preview = instructions + "\n\n"
 
     for doc in st.session_state.selected_documents:
         preview += format_document(doc["path"], doc["content"], format_type) + "\n\n"
@@ -165,38 +159,52 @@ st.markdown("Select documents to include in your chat session.")
 col1, col2 = st.columns([3, 1])
 
 with col1:
+    # Get the base directory from config
+    default_base_folder = config.get_global("base_directories", {}).get("documents", os.getcwd())
+
+    # Get the current base folder from page config or use the default
+    current_base_folder = config.get_page_config("documents", "base_folder", default_base_folder)
+
     base_folder = st.text_input(
         "Base Folder Path", 
-        value=st.session_state.base_folder,
+        value=current_base_folder,
         help="Enter the folder path to browse for documents"
     )
 
+    # Update config if changed
+    if base_folder != current_base_folder:
+        config.set_page_config("documents", "base_folder", base_folder)
+
 with col2:
-    recursive = st.checkbox("Search Recursively", value=False)
+    # Get recursive setting from config
+    recursive = st.checkbox("Search Recursively", 
+                           value=config.get_page_config("documents", "recursive", False))
+
+    # Update config if changed
+    if recursive != config.get_page_config("documents", "recursive", False):
+        config.set_page_config("documents", "recursive", recursive)
+
+    # Get show_ignored setting from config
     show_ignored = st.checkbox("Show Ignored Directories", 
-                               value=st.session_state.show_ignored_dirs,
-                               help="Show files in directories that are normally ignored")
+                              value=config.get_page_config("documents", "show_ignored_dirs", False),
+                              help="Show files in directories that are normally ignored")
 
-    # Update session state if changed
-    if show_ignored != st.session_state.show_ignored_dirs:
-        st.session_state.show_ignored_dirs = show_ignored
-
-# Update base folder in session state if changed
-if base_folder != st.session_state.base_folder:
-    st.session_state.base_folder = base_folder
+    # Update config if changed
+    if show_ignored != config.get_page_config("documents", "show_ignored_dirs", False):
+        config.set_page_config("documents", "show_ignored_dirs", show_ignored)
 
 # Refresh button
 if st.button("Refresh File List", type="primary"):
-    # Force refresh by clearing cache
-    st.session_state.base_folder = base_folder  # Update in case it changed
+    # Force refresh - no need to update anything as we're already using config values
+    pass
 
 # List files in the directory
-files, error = list_files(st.session_state.base_folder, recursive, st.session_state.show_ignored_dirs)
+files, error = list_files(base_folder, recursive, show_ignored)
 
 if error:
     st.error(error)
 elif not files:
-    st.info(f"No files found in '{st.session_state.base_folder}'")
+    st.info(f"No files found in '{base_folder}'")
 else:
     # Create two columns: one for file selection, one for selected files
     col_files, col_selected = st.columns(2)
@@ -225,7 +233,7 @@ else:
                         with col_check:
                             if st.checkbox("", value=is_selected, key=f"file_{file}", 
                                           on_change=add_document if not is_selected else remove_document,
-                                          args=([file, st.session_state.base_folder] if not is_selected else [file])):
+                                          args=([file, base_folder] if not is_selected else [file])):
                                 pass  # Checkbox state is handled by on_change
                         with col_name:
                             st.write(os.path.basename(file))
@@ -239,7 +247,7 @@ else:
                 with col_check:
                     if st.checkbox("", value=is_selected, key=f"file_{file}", 
                                   on_change=add_document if not is_selected else remove_document,
-                                  args=([file, st.session_state.base_folder] if not is_selected else [file])):
+                                  args=([file, base_folder] if not is_selected else [file])):
                         pass  # Checkbox state is handled by on_change
                 with col_name:
                     st.write(file)
@@ -273,38 +281,58 @@ else:
 st.markdown("---")
 st.subheader("Document Formatting")
 
-# Format selection
-format_options = {
-    "xml": "XML Tags (<document name=\"filename\">content</document>)",
-    "markdown": "Markdown (```filename\ncontent```)",
-    "simple": "Simple Text (--- filename ---\ncontent)"
-}
+# Get format options from config with fallback to global documents section
+format_options = config.get_page_config_with_fallback(
+    "documents", 
+    "format_options",
+    "documents",
+    "format_options", 
+    {
+        "xml": "XML Tags (<document name=\"filename\">content</document>)",
+        "markdown": "Markdown (```filename\ncontent```)",
+        "simple": "Simple Text (--- filename ---\ncontent)"
+    }
+)
+
+# Get current format from config with fallback to global documents section
+current_format = config.get_page_config_with_fallback("documents", "format", "documents", "format", "xml")
 
 selected_format = st.radio(
     "Select document format style:",
     options=list(format_options.keys()),
     format_func=lambda x: format_options[x],
-    index=list(format_options.keys()).index(st.session_state.document_format),
+    index=list(format_options.keys()).index(current_format) if current_format in format_options else 0,
     horizontal=True
 )
 
-# Update format in session state if changed
-if selected_format != st.session_state.document_format:
-    st.session_state.document_format = selected_format
+# Update format in page-specific config if changed
+if selected_format != current_format:
+    config.set_page_config("documents", "format", selected_format)
 
 # Document instructions
 st.subheader("Document Instructions")
 st.caption("This text will be prepended to the documents when sending to the model")
 
+# Get current instructions from config with fallback to global documents section
+current_instructions = config.get_page_config_with_fallback(
+    "documents", 
+    "instructions",
+    "documents",
+    "instructions", 
+    "I'm sharing some documents with you below. Please help me understand, analyze, "
+    "or modify these documents based on my questions. Reference the document names "
+    "when discussing specific parts."
+)
+
 document_instructions = st.text_area(
     "Instructions for the AI",
-    value=st.session_state.document_instructions,
+    value=current_instructions,
     height=100
 )
 
-# Update instructions in session state if changed
-if document_instructions != st.session_state.document_instructions:
-    st.session_state.document_instructions = document_instructions
+# Update instructions in page-specific config if changed
+if document_instructions != current_instructions:
+    config.set_page_config("documents", "instructions", document_instructions)
 
 # Preview section
 st.markdown("---")
@@ -365,20 +393,23 @@ with st.sidebar:
     st.metric("Selected Documents", total_docs)
     st.metric("Total Characters", total_chars)
 
-    # Rough token estimate (approx 4 chars per token)
-    est_tokens = total_chars // 4
+    # Get character to token ratio from config
+    char_to_token_ratio = config.get_page_config("documents", "char_to_token_ratio", 4)
+    est_tokens = total_chars // char_to_token_ratio
     st.metric("Estimated Tokens", est_tokens)
 
-    if est_tokens > 8000:
-        st.warning("⚠️ Selected documents may exceed context limits of some models.")
+    # Get token warning threshold from config
+    token_warning_threshold = config.get_page_config("documents", "token_warning_threshold", 8000)
+    if est_tokens > token_warning_threshold:
+        st.warning(f"⚠️ Selected documents may exceed context limits of some models ({est_tokens} tokens).")
 
     # Advanced settings expander for ignored directories
     with st.expander("Advanced Settings"):
         st.subheader("Ignored Directories")
         st.caption("These directories are skipped when browsing files")
 
-        # Convert set to sorted list for display
-        ignored_dirs_list = sorted(list(st.session_state.ignored_directories))
+        # Get ignored directories from config
+        ignored_dirs_list = sorted(config.get_global("ignored_directories", []))
         ignored_dirs_text = st.text_area(
             "One directory name per line:", 
             value="\n".join(ignored_dirs_list),
@@ -388,6 +419,33 @@ with st.sidebar:
         # Update the ignored directories if changed
         if st.button("Update Ignored Directories"):
             # Split by newlines and filter out empty lines
-            new_ignored_dirs = {dir.strip() for dir in ignored_dirs_text.split("\n") if dir.strip()}
-            st.session_state.ignored_directories = new_ignored_dirs
+            new_ignored_dirs = [dir.strip() for dir in ignored_dirs_text.split("\n") if dir.strip()]
+            config.set_global("ignored_directories", new_ignored_dirs)
             st.success("Ignored directories updated!")
+
+        # Character to token ratio setting
+        char_to_token_ratio = config.get_page_config("documents", "char_to_token_ratio", 4)
+        new_char_to_token_ratio = st.number_input(
+            "Characters per token:", 
+            min_value=1, 
+            max_value=10, 
+            value=char_to_token_ratio,
+            help="Used for estimating token count from character count"
+        )
+
+        if new_char_to_token_ratio != char_to_token_ratio:
+            config.set_page_config("documents", "char_to_token_ratio", int(new_char_to_token_ratio))
+
+        # Token warning threshold setting
+        token_warning_threshold = config.get_page_config("documents", "token_warning_threshold", 8000)
+        new_token_warning_threshold = st.number_input(
+            "Token warning threshold:", 
+            min_value=1000, 
+            max_value=100000, 
+            value=token_warning_threshold,
+            step=1000,
+            help="Show warning when estimated tokens exceed this value"
+        )
+
+        if new_token_warning_threshold != token_warning_threshold:
+            config.set_page_config("documents", "token_warning_threshold", int(new_token_warning_threshold))

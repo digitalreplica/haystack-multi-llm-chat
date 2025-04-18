@@ -1,4 +1,4 @@
-# pages/02_Chat.py
+# pages/03_Chat.py
 
 import streamlit as st
 import os
@@ -13,6 +13,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Get the ConfigManager instance
+config = st.session_state.config_manager
 
 # Check if we have selected models
 if "selected_models" not in st.session_state or not st.session_state.selected_models:
@@ -55,8 +58,11 @@ def prepare_document_context():
     if not st.session_state.get("selected_documents"):
         return None
 
-    format_type = st.session_state.get("document_format", "xml")
-    instructions = st.session_state.get("document_instructions", "")
+    # Get document format from config (with fallback to session state for backward compatibility)
+    format_type = config.get_page_config("documents", "format", "xml")
+
+    # Get document instructions from config (with fallback to session state for backward compatibility)
+    instructions = config.get_global("documents", {}).get("instructions", "")
 
     # Start with instructions
     context = instructions + "\n\n"
@@ -73,9 +79,12 @@ def get_user_and_selected_responses():
     # Start with the system message if set
     user_and_selected_messages = []
 
+    # Get system prompt from config
+    system_prompt = config.get_global("system_prompt", "")
+
     # Add system prompt if available
-    if "system_prompt" in st.session_state and st.session_state.system_prompt.strip():
-        system_message = ChatMessage.from_system(st.session_state.system_prompt)
+    if system_prompt.strip():
+        system_message = ChatMessage.from_system(system_prompt)
         user_and_selected_messages.append(system_message)
 
     # Then add user messages and selected assistant responses
@@ -118,8 +127,8 @@ def get_generator(model):
     params = model["params"]
 
     if provider == "AWS Bedrock":
-        # Set AWS region environment variable for Bedrock
-        region = params.pop("region", "us-east-1")
+        # Get AWS region from config with fallback to model params
+        region = config.get_provider_config("bedrock", "region", params.get("region", "us-east-1"))
         os.environ["AWS_REGION"] = region
 
         # Create generator with streaming capability
@@ -134,8 +143,8 @@ def get_generator(model):
         )
 
     elif provider == "Ollama":
-        # Extract Ollama-specific parameters
-        url = model.get("url", "http://localhost:11434")
+        # Extract Ollama-specific parameters with config fallback
+        url = model.get("url", config.get_provider_config("ollama", "url", "http://localhost:11434"))
 
         # Create generator with streaming capability
         def streaming_callback(chunk):
@@ -170,10 +179,13 @@ with st.sidebar:
 
     # Add system prompt display
     with st.expander("System Prompt"):
-        if "system_prompt" in st.session_state and st.session_state.system_prompt.strip():
+        # Get system prompt from config
+        system_prompt = config.get_global("system_prompt", "")
+
+        if system_prompt.strip():
             st.text_area(
                 "Current system prompt:", 
-                value=st.session_state.system_prompt,
+                value=system_prompt,
                 height=150,
                 disabled=True
             )
@@ -187,7 +199,9 @@ with st.sidebar:
             for doc in st.session_state.selected_documents:
                 st.write(f"- {doc['path']}")
 
-            st.write(f"**Format:** {st.session_state.get('document_format', 'xml')}")
+            # Get format from config
+            doc_format = config.get_page_config("documents", "format", "xml")
+            st.write(f"**Format:** {doc_format}")
 
             # Add button to view document preview
             if st.button("View Document Preview"):
@@ -206,7 +220,7 @@ with st.sidebar:
         st.switch_page("pages/01_Model_Selection.py")
 
     # Add back to document selection button
-    if st.session_state.get("selected_documents") or "document_format" in st.session_state:
+    if st.session_state.get("selected_documents"):
         if st.button("← Back to Documents", use_container_width=True):
             st.switch_page("pages/02_Documents.py")
 

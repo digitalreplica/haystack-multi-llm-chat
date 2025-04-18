@@ -15,8 +15,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Path for saved chats
-SAVE_DIR = pathlib.Path("saved_chats")
+# Get the ConfigManager
+config = st.session_state.config_manager
+
+# Path for saved chats - now from ConfigManager
+SAVE_DIR = pathlib.Path(config.get_global("base_directories", {}).get("saved_chats", "saved_chats"))
 SAVE_DIR.mkdir(exist_ok=True)
 
 # Helper functions
@@ -63,13 +66,11 @@ def save_current_chat():
         "metadata": {
             "timestamp": timestamp,
             "saved_at": datetime.now().isoformat(),
-            "selected_models": st.session_state.get("selected_models", []),
-            "system_prompt": st.session_state.get("system_prompt", ""),
             # Add document information
             "documents": {
                 "selected_documents": st.session_state.get("selected_documents", []),
-                "document_format": st.session_state.get("document_format", "xml"),
-                "document_instructions": st.session_state.get("document_instructions", "")
+                "document_format": config.get_page_config("documents", "format", "xml"),
+                "document_instructions": config.get_page_config("documents", "instructions", "")
             }
         }
     }
@@ -93,14 +94,6 @@ def load_chat_to_session(chat_data):
         # Update session state
         st.session_state.messages = messages
 
-        # Restore model selection if available
-        if "selected_models" in chat_data["metadata"]:
-            st.session_state.selected_models = chat_data["metadata"]["selected_models"]
-
-        # Restore system prompt if available
-        if "system_prompt" in chat_data["metadata"]:
-            st.session_state.system_prompt = chat_data["metadata"]["system_prompt"]
-
         # Restore document information if available
         if "documents" in chat_data["metadata"]:
             doc_data = chat_data["metadata"]["documents"]
@@ -108,11 +101,8 @@ def load_chat_to_session(chat_data):
             if "selected_documents" in doc_data:
                 st.session_state.selected_documents = doc_data["selected_documents"]
 
-            if "document_format" in doc_data:
-                st.session_state.document_format = doc_data["document_format"]
-
-            if "document_instructions" in doc_data:
-                st.session_state.document_instructions = doc_data["document_instructions"]
+            # Note: We're not updating the configuration with document format and instructions
+            # as these are now managed by ConfigManager
 
         return True, "Chat loaded successfully!"
     except Exception as e:
@@ -207,11 +197,13 @@ if "selected_chat_file" in st.session_state:
         else:
             timestamp_display = metadata.get("saved_at", "Unknown date")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**Date:** {timestamp_display}")
-        with col2:
+        # Display saved date
+        st.write(f"**Date:** {timestamp_display}")
+
+        # Display model information if available in older saved chats
+        if "selected_models" in metadata:
             st.write(f"**Models:** {', '.join([m['name'] for m in metadata['selected_models']])}")
+            st.info("Note: Model configuration is now managed separately and won't be restored when loading this chat.")
 
         # Display document information if available
         if "documents" in metadata and metadata["documents"].get("selected_documents"):

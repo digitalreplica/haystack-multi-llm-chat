@@ -50,6 +50,24 @@ This application allows you to:
 - **Ollama**: Use locally running or remote Ollama models
 """)
 
+# Configuration management section
+st.markdown("### Configuration Management")
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("💾 Save Configuration", use_container_width=True):
+        if st.session_state.config_manager.save_app_config():
+            st.success("Configuration saved successfully!")
+        else:
+            st.error("Failed to save configuration.")
+
+with col2:
+    if st.button("📂 Load Configuration", use_container_width=True):
+        if st.session_state.config_manager.load_app_config():
+            st.success("Configuration loaded successfully!")
+        else:
+            st.error("Failed to load configuration or no configuration file found.")
+
 # Get started button
 st.markdown("### Ready to get started?")
 if st.button("Configure Models", type="primary", use_container_width=True):
