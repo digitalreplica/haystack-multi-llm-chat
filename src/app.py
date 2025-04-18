@@ -11,7 +11,7 @@
 # See the LICENSE file for the full license text.
 
 import streamlit as st
-import os
+from utils.config_manager import ConfigManager
 
 # Set page configuration
 st.set_page_config(
@@ -20,6 +20,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize configuration manager (only once at startup)
+if "config_manager" not in st.session_state:
+    st.session_state.config_manager = ConfigManager()
 
 # Main content
 st.title("🤖 Haystack Multi-LLM Chat")
