@@ -171,6 +171,64 @@ class ConfigManager:
             st.session_state.config["providers"][provider_name] = {}
         st.session_state.config["providers"][provider_name][key] = value
 
+    def get_page_config_with_fallback(self, page_name: str, key: str, global_section: str = None, global_key: str = None, default: Any = None) -> Any:
+        """
+        Get page configuration with fallback to global section.
+
+        Args:
+            page_name: Name of the page
+            key: Configuration key to look for in page config
+            global_section: Global configuration section to check if not found in page config
+            global_key: Key in global section (defaults to same as key if None)
+            default: Default value if not found in either location
+
+        Returns:
+            Configuration value from page config, global config, or default
+        """
+        # First check page-specific config
+        page_value = self.get_page_config(page_name, key, None)
+        if page_value is not None:
+            return page_value
+
+        # Then check global section if specified
+        if global_section:
+            global_key = global_key or key  # Use the same key if not specified
+            global_value = self.get_global(f"{global_section}.{global_key}", None)
+            if global_value is not None:
+                return global_value
+
+        # Finally return default
+        return default
+
+    def get_provider_config_with_fallback(self, provider_name: str, key: str, global_section: str = None, global_key: str = None, default: Any = None) -> Any:
+        """
+        Get provider configuration with fallback to global section.
+
+        Args:
+            provider_name: Name of the provider
+            key: Configuration key to look for in provider config
+            global_section: Global configuration section to check if not found in provider config
+            global_key: Key in global section (defaults to same as key if None)
+            default: Default value if not found in either location
+
+        Returns:
+            Configuration value from provider config, global config, or default
+        """
+        # First check provider-specific config
+        provider_value = self.get_provider_config(provider_name, key, None)
+        if provider_value is not None:
+            return provider_value
+
+        # Then check global section if specified
+        if global_section:
+            global_key = global_key or key  # Use the same key if not specified
+            global_value = self.get_global(f"{global_section}.{global_key}", None)
+            if global_value is not None:
+                return global_value
+
+        # Finally return default
+        return default
+
     def _merge_config(self, base_config: Dict[str, Any], overlay_config: Dict[str, Any]) -> None:
         """
         Deep merge overlay_config into base_config
