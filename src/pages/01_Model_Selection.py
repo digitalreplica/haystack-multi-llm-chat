@@ -210,8 +210,7 @@ with col1:
                 if st.button("Add Model", type="primary"):
                     params = {
                         "max_tokens": max_tokens,
-                        "temperature": temperature,
-                        "region": aws_region
+                        "temperature": temperature
                     }
                     add_model("AWS Bedrock", model_name, params)
 
