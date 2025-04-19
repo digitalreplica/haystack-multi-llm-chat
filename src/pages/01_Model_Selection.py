@@ -200,12 +200,6 @@ with col1:
                     max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=default_max_tokens, step=100)
                     temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=default_temperature, step=0.1)
 
-                # Save defaults if they changed
-                if max_tokens != default_max_tokens:
-                    config.set_provider_config("bedrock", "default_max_tokens", max_tokens)
-                if temperature != default_temperature:
-                    config.set_provider_config("bedrock", "default_temperature", temperature)
-
                 # Add model button
                 if st.button("Add Model", type="primary"):
                     params = {
@@ -213,6 +207,12 @@ with col1:
                         "temperature": temperature
                     }
                     add_model("AWS Bedrock", model_name, params)
+
+                    # Save defaults if they changed
+                    if max_tokens != default_max_tokens:
+                        config.set_provider_config("bedrock", "default_max_tokens", max_tokens)
+                    if temperature != default_temperature:
+                        config.set_provider_config("bedrock", "default_temperature", temperature)
 
         elif provider == "Ollama":
             # Ollama URL - get from provider config
@@ -256,14 +256,6 @@ with col1:
                         temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=default_temperature, step=0.1)
                         context_window = st.slider("Context Window Size", min_value=1000, max_value=128000, value=default_context_window, step=1000)
 
-                    # Save defaults if they changed
-                    if max_tokens != default_max_tokens:
-                        config.set_provider_config("ollama", "default_max_tokens", max_tokens)
-                    if temperature != default_temperature:
-                        config.set_provider_config("ollama", "default_temperature", temperature)
-                    if context_window != default_context_window:
-                        config.set_provider_config("ollama", "default_context_window", context_window)
-
                     # Add model button
                     if st.button("Add Model", type="primary"):
                         params = {
@@ -273,6 +265,14 @@ with col1:
                         }
                         # Store the display name for showing in the selected models list
                         add_model("Ollama", model_name, {"url": ollama_url, "display_name": selected_display_name, **params})
+
+                        # Save defaults if they changed
+                        if max_tokens != default_max_tokens:
+                            config.set_provider_config("ollama", "default_max_tokens", max_tokens)
+                        if temperature != default_temperature:
+                            config.set_provider_config("ollama", "default_temperature", temperature)
+                        if context_window != default_context_window:
+                            config.set_provider_config("ollama", "default_context_window", context_window)
 
 # Right column - Selected models
 with col2:
