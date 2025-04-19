@@ -173,7 +173,6 @@ global:
     saved_chats: "./saved_chats"
   system_prompt: "You are a helpful AI assistant."
   ignored_directories: [".git", ".env"]
-
 pages:
   # Page-specific settings
   model_selection:
@@ -181,8 +180,6 @@ pages:
   documents:
     recursive: true
     format: "xml"
-  # Other page settings...
-
 providers:
   # Provider-specific settings
   bedrock:
@@ -194,22 +191,22 @@ providers:
 
 The application still uses Streamlit session state to maintain application state across page navigation and reruns:
 
-| Session State Variable | Description | Initialized In | Used In |
-|------------------------|-------------|---------------|---------|
-| `config_manager` | ConfigManager instance | app.py | All pages |
-| `selected_models` | List of configured models | Model Selection | All pages |
-| `messages` | Conversation history | Chat | Chat, Saved Chats |
-| `last_user_msg_idx` | Index of last user message | Chat | Chat |
-| `awaiting_selection` | Flag for pending response selection | Chat | Chat |
-| `selected_documents` | List of selected document data | Documents | Documents, Chat |
-| `streaming_[model_id]` | Buffer for streaming responses | Chat | Chat |
-| `placeholder_[model_id]` | UI placeholder for streaming | Chat | Chat |
-| `search_document_store` | In-memory document store for search | Search | Search |
-| `search_retriever` | BM25 retriever for document search | Search | Search |
-| `indexed_files` | Set of files that have been indexed | Search | Search |
-| `selected_search_results` | List of selected search results | Search | Search, Chat |
-| `last_search_results` | Results from most recent search | Search | Search |
-| `last_search_query` | Most recent search query | Search | Search |
+| Session State Variable    | Description                         | Initialized In  | Used In           |
+|---------------------------|-------------------------------------|-----------------|-------------------|
+| `config_manager`          | ConfigManager instance              | app.py          | All pages         |
+| `selected_models`         | List of configured models           | Model Selection | All pages         |
+| `messages`                | Conversation history                | Chat            | Chat, Saved Chats |
+| `last_user_msg_idx`       | Index of last user message          | Chat            | Chat              |
+| `awaiting_selection`      | Flag for pending response selection | Chat            | Chat              |
+| `selected_documents`      | List of selected document data      | Documents       | Documents, Chat   |
+| `streaming_[model_id]`    | Buffer for streaming responses      | Chat            | Chat              |
+| `placeholder_[model_id]`  | UI placeholder for streaming        | Chat            | Chat              |
+| `search_document_store`   | In-memory document store for search | Search          | Search            |
+| `search_retriever`        | BM25 retriever for document search  | Search          | Search            |
+| `indexed_files`           | Set of files that have been indexed | Search          | Search            |
+| `selected_search_results` | List of selected search results     | Search          | Search, Chat      |
+| `last_search_results`     | Results from most recent search     | Search          | Search            |
+| `last_search_query`       | Most recent search query            | Search          | Search            |
 
 ### 2.3 External API Integration
 
@@ -382,11 +379,11 @@ Haystack-MultiLLM-Chat/
 ├── src/                          # Source code directory
 │   ├── app.py                    # Main entry point for the app
 │   ├── pages/                    # Streamlit pages
-│   │   ├── 01_Model_Selection.py
-│   │   ├── 02_Documents.py
-│   │   ├── 03_Chat.py
-│   │   ├── 04_Saved_Chats.py
-│   │   └── 05_Search.py         # Document search functionality
+│   │   ├── 01_Model_Selection.py # Select AI models
+│   │   ├── 02_Documents.py       # Document selection
+│   │   ├── 03_Chat.py            # AI chat
+│   │   ├── 04_Saved_Chats.py     # Save and load chats
+│   │   └── 05_Search.py          # Document search functionality
 │   ├── utils/                    # Utility functions
 │   │   └── config_manager.py     # Configuration management
 │   ├── components/               # Reusable UI components
@@ -479,6 +476,8 @@ Todo: add document chunking and embedding:
 ### 6.1 AWS Bedrock Throttling
 
 **Issue**: The application encounters `ThrottlingException` when calling the `ConverseStream` operation.
+
+**Workaround**: An error message instructs the user to wait, then use the `/retry` command.
 
 **Solution**:
 1. Implement exponential backoff and retry logic:
