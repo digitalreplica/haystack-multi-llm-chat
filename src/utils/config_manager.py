@@ -44,6 +44,12 @@ class ConfigManager:
         # Save the default configuration
         self.save_app_config()
 
+    def get_config(self) -> dict:
+        """Get the current configuration"""
+        if "config" in st.session_state:
+            return st.session_state.config
+        return {"global": {}, "pages": {}, "providers": {}}
+
     def load_app_config(self) -> bool:
         """Load the application configuration from file"""
         try:
@@ -89,7 +95,7 @@ class ConfigManager:
             st.error(f"Error loading template '{template_name}': {str(e)}")
             return False
 
-    def save_as_template(self, template_name: str, description: str = "") -> bool:
+    def save_as_template(self, template_name: str, description: str = "", created_at: str = None) -> bool:
         """Save current configuration as a template"""
         template_path = os.path.join(self.templates_dir, f"{template_name}.yaml")
 
@@ -98,7 +104,7 @@ class ConfigManager:
         template_config["_metadata"] = {
             "template_name": template_name,
             "description": description,
-            "created_at": datetime.now().isoformat()
+            "created_at": created_at or datetime.now().isoformat()  # Use provided datetime or generate
         }
 
         try:
