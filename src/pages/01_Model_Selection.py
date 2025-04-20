@@ -202,17 +202,20 @@ with col1:
 
                 # Add model button
                 if st.button("Add Model", type="primary"):
+                    # Save defaults if they changed
+                    if max_tokens != default_max_tokens:
+                        config.set_provider_config("bedrock", "default_max_tokens", max_tokens)
+                    if temperature != default_temperature:
+                        config.set_provider_config("bedrock", "default_temperature", temperature)
+                    print(config.get_config())
+
+                    # Add model with parameters
                     params = {
                         "max_tokens": max_tokens,
                         "temperature": temperature
                     }
                     add_model("AWS Bedrock", model_name, params)
 
-                    # Save defaults if they changed
-                    if max_tokens != default_max_tokens:
-                        config.set_provider_config("bedrock", "default_max_tokens", max_tokens)
-                    if temperature != default_temperature:
-                        config.set_provider_config("bedrock", "default_temperature", temperature)
 
         elif provider == "Ollama":
             # Ollama URL - get from provider config
@@ -258,14 +261,6 @@ with col1:
 
                     # Add model button
                     if st.button("Add Model", type="primary"):
-                        params = {
-                            "max_tokens": max_tokens,
-                            "temperature": temperature,
-                            "num_ctx": context_window
-                        }
-                        # Store the display name for showing in the selected models list
-                        add_model("Ollama", model_name, {"url": ollama_url, "display_name": selected_display_name, **params})
-
                         # Save defaults if they changed
                         if max_tokens != default_max_tokens:
                             config.set_provider_config("ollama", "default_max_tokens", max_tokens)
@@ -273,6 +268,15 @@ with col1:
                             config.set_provider_config("ollama", "default_temperature", temperature)
                         if context_window != default_context_window:
                             config.set_provider_config("ollama", "default_context_window", context_window)
+                        print(config.get_config())
+
+                        # Add model with parameters
+                        params = {
+                            "max_tokens": max_tokens,
+                            "temperature": temperature,
+                            "num_ctx": context_window
+                        }
+                        add_model("Ollama", model_name, {"url": ollama_url, "display_name": selected_display_name, **params})
 
 # Right column - Selected models
 with col2:

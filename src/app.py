@@ -28,12 +28,12 @@ if "config_manager" not in st.session_state:
     st.session_state.config_manager = ConfigManager()
 
 # Initialize session state variables for configuration management
-if "yaml_editor_content" not in st.session_state:
-    st.session_state.yaml_editor_content = yaml.dump(
-        st.session_state.config, 
-        sort_keys=False, 
-        default_flow_style=False
-    )
+# UPDATED: Always refresh yaml_editor_content with current config
+st.session_state.yaml_editor_content = yaml.dump(
+    st.session_state.config_manager.get_config(), 
+    sort_keys=False, 
+    default_flow_style=False
+)
 if "yaml_valid" not in st.session_state:
     st.session_state.yaml_valid = True
 if "yaml_error" not in st.session_state:
@@ -88,7 +88,7 @@ def validate_yaml(yaml_content):
 
 def update_yaml_editor():
     st.session_state.yaml_editor_content = yaml.dump(
-        st.session_state.config, 
+        st.session_state.config.get_config(), 
         sort_keys=False, 
         default_flow_style=False
     )
