@@ -45,6 +45,14 @@ if "new_template_name" not in st.session_state:
 if "template_description" not in st.session_state:
     st.session_state.template_description = ""
 
+# Reset form after creating new template
+if "_reset_template_form" in st.session_state and st.session_state["_reset_template_form"]:
+    # Reset the form values
+    st.session_state.new_template_name = ""
+    st.session_state.template_description = ""
+    # Clear the reset flag
+    st.session_state["_reset_template_form"] = False
+
 # Main content
 st.title("🤖 Haystack Multi-LLM Chat")
 st.markdown("### Compare responses from multiple language models side-by-side")
@@ -230,19 +238,21 @@ with template_col2:
             if apply_yaml_changes():
                 # Pass the current datetime to avoid the error
                 created_at = datetime.now().isoformat()
+                template_name = st.session_state.new_template_name  # Store the name before resetting
+                template_desc = st.session_state.template_description  # Store the description before resetting
+
                 if st.session_state.config_manager.save_as_template(
-                    st.session_state.new_template_name, 
-                    st.session_state.template_description,
+                    template_name, 
+                    template_desc,
                     created_at
                 ):
-                    st.success(f"New template '{st.session_state.new_template_name}' created!")
-                    # Reset fields
-                    st.session_state.new_template_name = ""
-                    st.session_state.template_description = ""
-                    # Force rerun to update template list
-                    st.rerun()
+                    st.success(f"New template '{template_name}' created!")
+                    # Use session_state.clear() with a rerun instead of directly modifying the variables
+                    # This avoids the StreamlitAPIException
+                    st.session_state["_reset_template_form"] = True
+                    st.rerun()  # Force rerun to update template list and reset form
                 else:
-                    st.error(f"Failed to create template '{st.session_state.new_template_name}'.")
+                    st.error(f"Failed to create template '{template_name}'.")
             else:
                 st.error(f"Cannot save invalid configuration: {st.session_state.yaml_error}")
     else:
