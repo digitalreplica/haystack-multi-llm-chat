@@ -207,7 +207,6 @@ with col1:
                         config.set_provider_config("bedrock", "default_max_tokens", max_tokens)
                     if temperature != default_temperature:
                         config.set_provider_config("bedrock", "default_temperature", temperature)
-                    print(config.get_config())
 
                     # Add model with parameters
                     params = {
