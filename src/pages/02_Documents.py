@@ -339,7 +339,7 @@ st.markdown("---")
 st.subheader("Preview")
 st.caption("This is how your documents will be formatted and sent to the model")
 
-with st.expander("Show Preview", expanded=True):
+with st.expander("Show Preview", expanded=False):
     preview_text = generate_preview()
     st.code(preview_text, language="text")
 
