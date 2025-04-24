@@ -231,8 +231,9 @@ else:
 
                         col_check, col_name = st.columns([1, 4])
                         with col_check:
-                            if st.checkbox("", value=is_selected, key=f"file_{file}", 
+                            if st.checkbox(label=f"Select {file}", value=is_selected, key=f"file_{file}", 
                                           on_change=add_document if not is_selected else remove_document,
+                                          label_visibility="collapsed",
                                           args=([file, base_folder] if not is_selected else [file])):
                                 pass  # Checkbox state is handled by on_change
                         with col_name:
@@ -245,8 +246,9 @@ else:
 
                 col_check, col_name = st.columns([1, 4])
                 with col_check:
-                    if st.checkbox("", value=is_selected, key=f"file_{file}", 
+                    if st.checkbox(label=f"Select {file}", value=is_selected, key=f"file_{file}", 
                                   on_change=add_document if not is_selected else remove_document,
+                                  label_visibility="collapsed",
                                   args=([file, base_folder] if not is_selected else [file])):
                         pass  # Checkbox state is handled by on_change
                 with col_name:
