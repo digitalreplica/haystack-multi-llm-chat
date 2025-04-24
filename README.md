@@ -65,13 +65,18 @@ The Haystack Multi-LLM Chat application is a Streamlit-based web application tha
 ### 2.1 Page Structure
 
 #### 2.1.1 Main Page (`app.py`)
-- **Purpose**: Application landing page
+- **Purpose**: Application landing page and configuration management
 - **Functionality**:
   - Displays application overview
   - Provides navigation to model configuration
   - Shows requirements and information about supported providers
+  - Manages application configuration through ConfigManager
+  - Provides YAML editor for direct configuration editing
+  - Supports template management for configuration templates
 - **Key Components**:
   - Introduction section
+  - Configuration management interface
+  - Template management interface
   - "Configure Models" button to start workflow
 
 #### 2.1.2 Model Selection (`01_Model_Selection.py`)
@@ -82,11 +87,11 @@ The Haystack Multi-LLM Chat application is a Streamlit-based web application tha
   - Set system prompt for all models
   - Manage list of selected models
 - **Key Components**:
-  - Provider selection interface
+  - Provider selection interface (now using ConfigManager)
   - Model discovery functions (`get_ollama_models()`, `get_bedrock_models()`)
   - Parameter configuration UI
   - Selected models display and management
-  - System prompt configuration
+  - System prompt configuration (now stored in ConfigManager)
 
 #### 2.1.3 Document Selection (`02_Documents.py`)
 - **Purpose**: Select and format documents for context
@@ -96,7 +101,7 @@ The Haystack Multi-LLM Chat application is a Streamlit-based web application tha
   - Configure document formatting options
   - Set instructions for document handling
 - **Key Components**:
-  - File browser with recursive option
+  - File browser with recursive option (config from ConfigManager)
   - Document selection interface
   - Format selection (XML, Markdown, Simple)
   - Document instructions configuration
@@ -145,30 +150,63 @@ The Haystack Multi-LLM Chat application is a Streamlit-based web application tha
   - Selection management for snippets and full documents
   - Preview of formatted content
 
-### 2.2 Session State Management
+### 2.2 Configuration Management
 
-The application uses Streamlit's session state to maintain data across page navigation and reruns:
+The application uses a centralized ConfigManager to handle all configuration:
 
-| Session State Variable | Description | Initialized In | Used In |
-|------------------------|-------------|---------------|---------|
-| `selected_models` | List of configured models | Model Selection | All pages |
-| `system_prompt` | System instructions for models | Model Selection | Chat |
-| `messages` | Conversation history | Chat | Chat, Saved Chats |
-| `last_user_msg_idx` | Index of last user message | Chat | Chat |
-| `awaiting_selection` | Flag for pending response selection | Chat | Chat |
-| `selected_documents` | List of selected document data | Documents | Documents, Chat |
-| `document_format` | Format style for documents | Documents | Documents, Chat |
-| `document_instructions` | Instructions for document handling | Documents | Documents, Chat |
-| `streaming_[model_id]` | Buffer for streaming responses | Chat | Chat |
-| `placeholder_[model_id]` | UI placeholder for streaming | Chat | Chat |
-| `search_document_store` | In-memory document store for search | Search | Search |
-| `search_retriever` | BM25 retriever for document search | Search | Search |
-| `indexed_files` | Set of files that have been indexed | Search | Search |
-| `selected_search_results` | List of selected search results | Search | Search, Chat |
-| `ignored_directories` | Directories to skip when indexing | Search | Search |
-| `search_results_count` | Number of results to display | Search | Search |
-| `last_search_results` | Results from most recent search | Search | Search |
-| `last_search_query` | Most recent search query | Search | Search |
+#### 2.2.1 ConfigManager
+
+The `ConfigManager` class provides a centralized way to manage application configuration with the following features:
+
+- **Hierarchical Configuration**: Organized into global, page-specific, and provider-specific settings
+- **Configuration Persistence**: Save/load configuration to/from YAML files
+- **Template Support**: Save and load configuration templates
+- **Fallback Mechanism**: Page settings can fall back to global defaults
+
+#### 2.2.2 Configuration Structure
+
+```yaml
+global:
+  # Settings used across multiple pages
+  base_directories:
+    documents: "./data/documents"
+    saved_chats: "./saved_chats"
+  system_prompt: "You are a helpful AI assistant."
+  ignored_directories: [".git", ".env"]
+pages:
+  # Page-specific settings
+  model_selection:
+    default_provider: "bedrock"
+  documents:
+    recursive: true
+    format: "xml"
+providers:
+  # Provider-specific settings
+  bedrock:
+    region: "us-east-1"
+  # Other provider settings...
+```
+
+#### 2.2.3 Session State Management
+
+The application still uses Streamlit session state to maintain application state across page navigation and reruns:
+
+| Session State Variable    | Description                         | Initialized In  | Used In           |
+|---------------------------|-------------------------------------|-----------------|-------------------|
+| `config_manager`          | ConfigManager instance              | app.py          | All pages         |
+| `selected_models`         | List of configured models           | Model Selection | All pages         |
+| `messages`                | Conversation history                | Chat            | Chat, Saved Chats |
+| `last_user_msg_idx`       | Index of last user message          | Chat            | Chat              |
+| `awaiting_selection`      | Flag for pending response selection | Chat            | Chat              |
+| `selected_documents`      | List of selected document data      | Documents       | Documents, Chat   |
+| `streaming_[model_id]`    | Buffer for streaming responses      | Chat            | Chat              |
+| `placeholder_[model_id]`  | UI placeholder for streaming        | Chat            | Chat              |
+| `search_document_store`   | In-memory document store for search | Search          | Search            |
+| `search_retriever`        | BM25 retriever for document search  | Search          | Search            |
+| `indexed_files`           | Set of files that have been indexed | Search          | Search            |
+| `selected_search_results` | List of selected search results     | Search          | Search, Chat      |
+| `last_search_results`     | Results from most recent search     | Search          | Search            |
+| `last_search_query`       | Most recent search query            | Search          | Search            |
 
 ### 2.3 External API Integration
 
@@ -204,7 +242,41 @@ The application uses Streamlit's session state to maintain data across page navi
 
 ## 3. Design Patterns and Decisions
 
-### 3.1 Conversation History Management
+### 3.1 Configuration Management Pattern
+
+The application uses the ConfigManager to centralize all configuration handling:
+
+1. **Hierarchical Configuration**:
+   - Global settings apply across the entire application
+   - Page-specific settings override global defaults
+   - Provider-specific settings for individual LLM providers
+
+2. **Configuration Access Pattern**:
+   ```python
+   # Get the ConfigManager instance
+   config = st.session_state.config_manager
+   
+   # Access global configuration
+   system_prompt = config.get_global("system_prompt", "Default prompt")
+   
+   # Access page-specific configuration
+   recursive = config.get_page_config("documents", "recursive", False)
+   
+   # Access provider-specific configuration
+   region = config.get_provider_config("bedrock", "region", "us-east-1")
+   
+   # Access with fallback to global
+   format = config.get_page_config_with_fallback(
+       "documents", "format", "documents", "format", "xml"
+   )
+   ```
+
+3. **Configuration Persistence**:
+   - Configuration is loaded from `config/app_config.yaml` at startup
+   - Changes can be saved back to the file for persistence
+   - Template system allows saving/loading different configurations
+
+### 3.2 Conversation History Management
 
 The application uses a hybrid approach to conversation history:
 
@@ -222,7 +294,7 @@ The application uses a hybrid approach to conversation history:
    - The `last_user_msg_idx` tracks the position of the last user message
    - Responses are displayed side-by-side using this grouping
 
-### 3.2 Streaming Response Handling
+### 3.3 Streaming Response Handling
 
 The application implements streaming responses through:
 
@@ -241,7 +313,7 @@ The application implements streaming responses through:
    - Content is accumulated in the buffer during streaming
    - Final content is stored in the message history after completion
 
-### 3.3 Side-by-Side Comparison Implementation
+### 3.4 Side-by-Side Comparison Implementation
 
 The side-by-side comparison is implemented through:
 
@@ -259,7 +331,7 @@ The side-by-side comparison is implemented through:
    - This ensures the conversation history is consistent for all models
    - Selection is only required when multiple models are used
 
-### 3.4 Document Context Integration
+### 3.5 Document Context Integration
 
 Documents are integrated into the conversation through:
 
@@ -270,17 +342,19 @@ Documents are integrated into the conversation through:
 2. **Format Templating**:
    - Documents are formatted according to the selected style (XML, Markdown, Simple)
    - Each format has a specific template for document name and content
+   - Format settings are stored in ConfigManager
 
 3. **Instruction Prefixing**:
    - Custom instructions are added before document content
    - This guides the model on how to use the documents
+   - Instructions are stored in ConfigManager
 
 4. **Document Search and Selection**:
    - Documents can be browsed directly or discovered through search
    - Search allows finding specific content within large document collections
    - Both snippets and full documents can be selected from search results
 
-### 3.5 Search Implementation
+### 3.6 Search Implementation
 
 The document search functionality is implemented through:
 
@@ -305,17 +379,18 @@ Haystack-MultiLLM-Chat/
 ├── src/                          # Source code directory
 │   ├── app.py                    # Main entry point for the app
 │   ├── pages/                    # Streamlit pages
-│   │   ├── 01_Model_Selection.py
-│   │   ├── 02_Documents.py
-│   │   ├── 03_Chat.py
-│   │   └── 04_Saved_Chats.py
-│   │   └── 05_Search.py         # Document search functionality
+│   │   ├── 01_Model_Selection.py # Select AI models
+│   │   ├── 02_Documents.py       # Document selection
+│   │   ├── 03_Chat.py            # AI chat
+│   │   ├── 04_Saved_Chats.py     # Save and load chats
+│   │   └── 05_Search.py          # Document search functionality
 │   ├── utils/                    # Utility functions
+│   │   └── config_manager.py     # Configuration management
 │   ├── components/               # Reusable UI components
-│   └── providers/                # Provider-specific implementations
+│   ├── providers/                # Provider-specific implementations
+│   └── config/                   # Configuration files
+│       └── app_config.yaml       # Default application configuration
 ├── tests/                        # Test directory
-├── config/                       # Configuration files
-│   └── default_config.yaml       # Default configuration
 ├── docs/                         # Documentation
 ├── data/                         # Sample data and saved chats
 ├── .gitignore                    # Git ignore file
@@ -339,15 +414,31 @@ To add a new LLM provider:
    - Add a case in the `get_generator()` function to initialize the generator
    - Implement streaming callback for the provider
 
-3. **Update Chat Interface**:
-   - Ensure the provider's responses are properly handled
-   - Add any provider-specific error handling
+3. **Update Provider Configuration**:
+   - Add provider-specific settings to the ConfigManager
+   - Update the default configuration in `app_config.yaml`
 
 ### 5.2 Implementing New Features
 
-#### 5.2.1 Adding Model Comparison Metrics
+#### 5.2.1 Adding Configuration Options
 
-Future consideration
+To add new configuration options:
+
+1. **Update ConfigManager**:
+   - Determine whether the setting belongs in global, page, or provider section
+   - Add the setting to the default configuration in `app_config.yaml`
+
+2. **Access in Code**:
+   ```python
+   # For global settings
+   setting = config.get_global("setting_name", default_value)
+   
+   # For page settings
+   setting = config.get_page_config("page_name", "setting_name", default_value)
+   
+   # For provider settings
+   setting = config.get_provider_config("provider_name", "setting_name", default_value)
+   ```
 
 #### 5.2.2 Adding Document Processing Capabilities
 
@@ -359,7 +450,8 @@ Todo: add document chunking and embedding:
 
 - **Modularize Common Functions**: Extract shared functionality into separate Python modules
 - **Consistent Naming**: Use consistent naming conventions for variables and functions
-- **Session State Management**: Document all session state variables and their purposes
+- **Configuration Management**: Use ConfigManager for all settings, avoid direct session state
+- **Session State Management**: Use session state only for application state, not configuration
 
 #### 5.3.2 Error Handling
 
@@ -384,6 +476,8 @@ Todo: add document chunking and embedding:
 ### 6.1 AWS Bedrock Throttling
 
 **Issue**: The application encounters `ThrottlingException` when calling the `ConverseStream` operation.
+
+**Workaround**: An error message instructs the user to wait, then use the `/retry` command.
 
 **Solution**:
 1. Implement exponential backoff and retry logic:

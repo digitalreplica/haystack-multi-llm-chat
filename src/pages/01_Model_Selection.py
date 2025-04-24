@@ -15,6 +15,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Get the ConfigManager instance
+config = st.session_state.config_manager
+
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def get_ollama_models(ollama_url="http://localhost:11434"):
     """Query Ollama for available models."""
@@ -65,6 +68,9 @@ def get_ollama_models(ollama_url="http://localhost:11434"):
 def get_bedrock_models(region="us-east-1"):
     """Query AWS Bedrock for available models."""
     try:
+        # Get region from config if available
+        region = config.get_provider_config("bedrock", "region", region)
+
         # Initialize Bedrock client with specified region
         bedrock_client = boto3.client('bedrock', region_name=region)
 
@@ -89,7 +95,8 @@ def get_bedrock_models(region="us-east-1"):
         st.warning(f"Error fetching AWS Bedrock models: {str(e)}")
         return ["us.anthropic.claude-3-7-sonnet-20250219-v1:0"]  # Default fallback
 
-# Initialize session state for selected models if it doesn't exist
+# Initialize selected models in session state if not already present
+# We keep this in session state as it represents application state, not configuration
 if "selected_models" not in st.session_state:
     st.session_state.selected_models = []
 
@@ -145,18 +152,32 @@ with col1:
         # We can't reset widgets directly, but the form will show empty values on next run
 
     # Provider selection
+    # Use config to get the default provider
+    default_provider = config.get_page_config("model_selection", "default_provider", "")
     provider_options = ["", "AWS Bedrock", "Ollama"]
     provider = st.selectbox(
         "Select Provider", 
         provider_options,
+        index=provider_options.index(default_provider) if default_provider in provider_options else 0,
         key="new_model_provider"
     )
+
+    # Save the selected provider as default
+    if provider != default_provider and provider != "":
+        config.set_page_config("model_selection", "default_provider", provider)
 
     if provider:
         # Provider-specific configuration
         if provider == "AWS Bedrock":
-            # AWS Region
-            aws_region = st.text_input("AWS Region", value="us-east-1")
+            # AWS Region - get from provider config
+            aws_region = st.text_input(
+                "AWS Region", 
+                value=config.get_provider_config("bedrock", "region", "us-east-1")
+            )
+
+            # Update provider config if region changed
+            if aws_region != config.get_provider_config("bedrock", "region", "us-east-1"):
+                config.set_provider_config("bedrock", "region", aws_region)
 
             # Get available models
             with st.spinner("Loading AWS Bedrock models..."):
@@ -170,23 +191,39 @@ with col1:
             )
 
             if model_name:
+                # Get default parameters from config
+                default_max_tokens = config.get_provider_config("bedrock", "default_max_tokens", 4000)
+                default_temperature = config.get_provider_config("bedrock", "default_temperature", 0.7)
+
                 # Model parameters
                 with st.expander("Model Parameters", expanded=True):
-                    max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=4000, step=100)
-                    temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
+                    max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=default_max_tokens, step=100)
+                    temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=default_temperature, step=0.1)
 
                 # Add model button
                 if st.button("Add Model", type="primary"):
+                    # Save defaults if they changed
+                    if max_tokens != default_max_tokens:
+                        config.set_provider_config("bedrock", "default_max_tokens", max_tokens)
+                    if temperature != default_temperature:
+                        config.set_provider_config("bedrock", "default_temperature", temperature)
+
+                    # Add model with parameters
                     params = {
                         "max_tokens": max_tokens,
-                        "temperature": temperature,
-                        "region": aws_region
+                        "temperature": temperature
                     }
                     add_model("AWS Bedrock", model_name, params)
 
+
         elif provider == "Ollama":
-            # Ollama URL
-            ollama_url = st.text_input("Ollama Server URL", value="http://localhost:11434")
+            # Ollama URL - get from provider config
+            default_url = config.get_provider_config("ollama", "url", "http://localhost:11434")
+            ollama_url = st.text_input("Ollama Server URL", value=default_url)
+
+            # Update provider config if URL changed
+            if ollama_url != default_url:
+                config.set_provider_config("ollama", "url", ollama_url)
 
             # Get available models
             with st.spinner("Loading Ollama models..."):
@@ -210,20 +247,34 @@ with col1:
                 if selected_model:
                     model_name = selected_model["name"]  # Get the actual model name for API calls
 
+                    # Get default parameters from config
+                    default_max_tokens = config.get_provider_config("ollama", "default_max_tokens", 4000)
+                    default_temperature = config.get_provider_config("ollama", "default_temperature", 0.7)
+                    default_context_window = config.get_provider_config("ollama", "default_context_window", 64000)
+
                     # Model parameters
                     with st.expander("Model Parameters", expanded=True):
-                        max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=4000, step=100)
-                        temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
-                        context_window = st.slider("Context Window Size", min_value=1000, max_value=128000, value=64000, step=1000)
+                        max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=default_max_tokens, step=100)
+                        temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=default_temperature, step=0.1)
+                        context_window = st.slider("Context Window Size", min_value=1000, max_value=128000, value=default_context_window, step=1000)
 
                     # Add model button
                     if st.button("Add Model", type="primary"):
+                        # Save defaults if they changed
+                        if max_tokens != default_max_tokens:
+                            config.set_provider_config("ollama", "default_max_tokens", max_tokens)
+                        if temperature != default_temperature:
+                            config.set_provider_config("ollama", "default_temperature", temperature)
+                        if context_window != default_context_window:
+                            config.set_provider_config("ollama", "default_context_window", context_window)
+                        print(config.get_config())
+
+                        # Add model with parameters
                         params = {
                             "max_tokens": max_tokens,
                             "temperature": temperature,
                             "num_ctx": context_window
                         }
-                        # Store the display name for showing in the selected models list
                         add_model("Ollama", model_name, {"url": ollama_url, "display_name": selected_display_name, **params})
 
 # Right column - Selected models
@@ -270,21 +321,18 @@ st.markdown("---")  # This is the dashed line you mentioned
 st.subheader("System Prompt")
 st.caption("This prompt will be sent to all models to define their behavior.")
 
-# Initialize default system prompt if not already in session state
-if "system_prompt" not in st.session_state:
-    st.session_state.system_prompt = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should be detailed, accurate, and relevant to the question. If a question doesn't make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."
-
-# Text area for system prompt with current value from session state
+# Get system prompt from global config
 system_prompt = st.text_area(
     "System Prompt",
-    value=st.session_state.system_prompt,
+    value=config.get_global("system_prompt", 
+        "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should be detailed, accurate, and relevant to the question. If a question doesn't make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."),
     height=150,
     help="This instruction sets how all models will behave in the conversation."
 )
 
-# Update session state when the prompt changes
-if system_prompt != st.session_state.system_prompt:
-    st.session_state.system_prompt = system_prompt
+# Update global config when the prompt changes
+if system_prompt != config.get_global("system_prompt", ""):
+    config.set_global("system_prompt", system_prompt)
     st.success("System prompt updated!")
 
 # Disable the button if no models are selected
