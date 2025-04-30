@@ -250,7 +250,7 @@ with col1:
                     # Get default parameters from config
                     default_max_tokens = config.get_provider_config("ollama", "default_max_tokens", 4000)
                     default_temperature = config.get_provider_config("ollama", "default_temperature", 0.7)
-                    default_context_window = config.get_provider_config("ollama", "default_context_window", 64000)
+                    default_context_window = config.get_provider_config("ollama", "default_context_window", 32000)
 
                     # Model parameters
                     with st.expander("Model Parameters", expanded=True):
