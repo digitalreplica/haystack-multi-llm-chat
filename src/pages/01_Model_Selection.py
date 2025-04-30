@@ -267,7 +267,7 @@ with col1:
                             config.set_provider_config("ollama", "default_temperature", temperature)
                         if context_window != default_context_window:
                             config.set_provider_config("ollama", "default_context_window", context_window)
-                        print(config.get_config())
+                        # print(config.get_config())
 
                         # Add model with parameters
                         params = {
