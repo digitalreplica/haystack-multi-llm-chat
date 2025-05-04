@@ -224,16 +224,11 @@ def get_generator(model):
             st.session_state[f"streaming_{model['id']}"].append(chunk.content)
             st.session_state[f"placeholder_{model['id']}"].markdown("".join(st.session_state[f"streaming_{model['id']}"]))
 
-        # return OllamaChatGenerator(
-        #     model=model_name,
-        #     url=url,
-        #     generation_kwargs=params,
-        #     streaming_callback=streaming_callback
-        # )
         return OllamaChatGenerator(
             model=model_name,
             url=url,
-            generation_kwargs=params
+            generation_kwargs=params,
+            streaming_callback=streaming_callback
         )
 
     return None
