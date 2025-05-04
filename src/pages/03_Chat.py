@@ -228,6 +228,7 @@ def get_generator(model):
             model=model_name,
             url=url,
             generation_kwargs=params,
+            timeout=300,    # Longer timeout
             streaming_callback=streaming_callback
         )
 
