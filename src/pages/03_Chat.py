@@ -110,6 +110,12 @@ def reset_chat():
     if "awaiting_selection" in st.session_state:
         del st.session_state.awaiting_selection
 
+    # Reset model usage statistics
+    if "selected_models" in st.session_state:
+        for model in st.session_state.selected_models:
+            if "usage_stats" in model:
+                del model["usage_stats"]
+
 # This function extracts standardized token usage from response metadata
 def extract_token_usage(metadata):
     """
@@ -542,3 +548,6 @@ if prompt := st.chat_input("What would you like to ask? Help is available with /
         st.warning("⚠️ Please select one response before continuing.")
         # Force a rerun to update the UI with the disabled chat input
         st.rerun()
+    
+    # Rerun to update usage stats
+    st.rerun()
