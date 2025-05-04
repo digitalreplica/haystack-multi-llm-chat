@@ -247,29 +247,8 @@ st.title("💬 Haystack Multi-LLM Chat")
 with st.sidebar:
     st.title("Active Models")
 
-    # Add usage statistics display
-    with st.expander("Usage Statistics", expanded=True):
-        for model in st.session_state.selected_models:
-            model_name = model["name"]
-            provider = model["provider"]
-
-            st.write(f"**{model_name}** ({provider})")
-
-            # Check if we have usage statistics for this model
-            if "usage_stats" in model and model["usage_stats"]["response_count"] > 0:
-                stats = model["usage_stats"]
-
-                # Calculate average tokens per second
-                avg_tps = "N/A"
-                if stats["total_output_tokens"] > 0 and stats["total_eval_duration_ns"] > 0:
-                    eval_duration_seconds = stats["total_eval_duration_ns"] / 1_000_000_000
-                    avg_tps = f"{stats['total_output_tokens'] / eval_duration_seconds:.2f}"
-
-                st.write(f"Total Input Tokens: {stats['total_input_tokens']}")
-                st.write(f"Total Output Tokens: {stats['total_output_tokens']}")
-                st.write(f"Average Speed: {avg_tps} tokens/sec")
-            else:
-                st.write("No usage data available yet.")
+    # Add container so usage information can be added later
+    usage_expander = st.expander("Usage Statistics", expanded=True)
 
     for model in st.session_state.selected_models:
         with st.expander(f"{model['name']} ({model['provider']})"):
@@ -542,12 +521,33 @@ if prompt := st.chat_input("What would you like to ask? Help is available with /
                     )
                 response_placeholder.error(error_message)
 
+    with usage_expander:
+        # Add usage statistics display
+        for model in st.session_state.selected_models:
+            model_name = model["name"]
+            provider = model["provider"]
+
+            st.write(f"**{model_name}** ({provider})")
+
+            # Check if we have usage statistics for this model
+            if "usage_stats" in model and model["usage_stats"]["response_count"] > 0:
+                stats = model["usage_stats"]
+
+                # Calculate average tokens per second
+                avg_tps = "N/A"
+                if stats["total_output_tokens"] > 0 and stats["total_eval_duration_ns"] > 0:
+                    eval_duration_seconds = stats["total_eval_duration_ns"] / 1_000_000_000
+                    avg_tps = f"{stats['total_output_tokens'] / eval_duration_seconds:.2f}"
+
+                st.write(f"Total Input Tokens: {stats['total_input_tokens']}")
+                st.write(f"Total Output Tokens: {stats['total_output_tokens']}")
+                st.write(f"Average Speed: {avg_tps} tokens/sec")
+            else:
+                st.write("No usage data available yet.")
+
     # After all responses are generated, set flag to require selection
     if len(st.session_state.selected_models) > 1:  # Only require selection if we have multiple models
         st.session_state.awaiting_selection = True
         st.warning("⚠️ Please select one response before continuing.")
         # Force a rerun to update the UI with the disabled chat input
         st.rerun()
-    
-    # Rerun to update usage stats
-    st.rerun()
