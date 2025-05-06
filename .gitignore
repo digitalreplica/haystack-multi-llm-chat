@@ -178,3 +178,6 @@ saved_chats/
 
 # Config files
 src/config/
+
+# Temp testing script
+src/test-ollama-chat.py

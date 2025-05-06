@@ -103,12 +103,174 @@ def get_responses_for_user_message(user_msg_idx):
         i += 1
     return responses
 
+def calculate_cost(model, input_tokens, output_tokens):
+    """
+    Calculate the cost of token usage based on model cost parameters.
+    
+    Args:
+        model (dict): The model configuration
+        input_tokens (int): Number of input tokens used
+        output_tokens (int): Number of output tokens used
+        
+    Returns:
+        tuple: (input_cost, output_cost, total_cost) or None if cost info not available
+    """
+    # Check if cost information exists in the model configuration
+    if "cost" in model:
+        cost_info = model["cost"]
+        unit_count = cost_info.get("unit_count", 1000)
+        input_token_cost = cost_info.get("input_token_cost", 0.0)
+        output_token_cost = cost_info.get("output_token_cost", 0.0)
+        
+        # Calculate costs
+        input_cost = (input_tokens / unit_count) * input_token_cost
+        output_cost = (output_tokens / unit_count) * output_token_cost
+        total_cost = input_cost + output_cost
+        
+        return input_cost, output_cost, total_cost
+    
+    # For backward compatibility, check if cost information exists in the model parameters
+    elif "params" in model and "cost" in model["params"]:
+        cost_info = model["params"]["cost"]
+        unit_count = cost_info.get("unit_count", 1000)
+        input_token_cost = cost_info.get("input_token_cost", 0.0)
+        output_token_cost = cost_info.get("output_token_cost", 0.0)
+        
+        # Calculate costs
+        input_cost = (input_tokens / unit_count) * input_token_cost
+        output_cost = (output_tokens / unit_count) * output_token_cost
+        total_cost = input_cost + output_cost
+        
+        return input_cost, output_cost, total_cost
+    
+    # Default values if no cost information is available
+    else:
+        unit_count = 1000
+        input_cost = 0.0
+        output_cost = 0.0
+        total_cost = 0.0
+        
+        return input_cost, output_cost, total_cost
+
+def display_usage_statistics():
+    # Add usage statistics display
+    with st.expander("Usage Statistics", expanded=True):
+        for model in st.session_state.selected_models:
+            model_name = model["name"]
+            provider = model["provider"]
+
+            st.write(f"**{model_name}** ({provider})")
+
+            # Check if we have usage statistics for this model
+            if "usage_stats" in model and model["usage_stats"]["response_count"] > 0:
+                stats = model["usage_stats"]
+                input_tokens = stats["total_input_tokens"]
+                output_tokens = stats["total_output_tokens"]
+
+                # Calculate average tokens per second
+                avg_tps = "N/A"
+                if output_tokens > 0 and stats["total_eval_duration_ns"] > 0:
+                    eval_duration_seconds = stats["total_eval_duration_ns"] / 1_000_000_000
+                    avg_tps = f"{output_tokens / eval_duration_seconds:.2f}"
+
+                # Calculate costs
+                input_cost, output_cost, total_cost = calculate_cost(model, input_tokens, output_tokens)
+                
+                # Display token usage
+                st.write(f"Total Input Tokens: {input_tokens} (${input_cost:.4f})")
+                st.write(f"Total Output Tokens: {output_tokens} (${output_cost:.4f})")
+                st.write(f"Average Speed: {avg_tps} tokens/sec")
+                
+                # Display cost information if available
+                st.write(f"Total Cost: ${total_cost:.4f}")
+            else:
+                st.write("No usage data available yet.")
+
 def reset_chat():
     """Reset the chat history."""
     st.session_state.messages = []
     st.session_state.last_user_msg_idx = -1
     if "awaiting_selection" in st.session_state:
         del st.session_state.awaiting_selection
+
+    # Reset model usage statistics
+    if "selected_models" in st.session_state:
+        for model in st.session_state.selected_models:
+            if "usage_stats" in model:
+                del model["usage_stats"]
+
+# This function extracts standardized token usage from response metadata
+def extract_token_usage(metadata):
+    """
+    Extract token usage information from response metadata.
+
+    Args:
+        metadata (dict): The metadata from the LLM response
+
+    Returns:
+        dict: Dictionary with token usage information or None if not available
+    """
+    # Check if the response is complete
+    if not metadata.get("done", True):
+        return None
+
+    # Try to get usage information
+    usage = metadata.get("usage", {})
+
+    # If no usage information is available
+    if not usage:
+        return None
+
+    # Extract token counts
+    input_tokens = usage.get("prompt_tokens", 0)
+    output_tokens = usage.get("completion_tokens", 0)
+
+    # Extract evaluation duration
+    eval_duration_ns = metadata.get("eval_duration", 0)
+
+    # Calculate tokens per second if we have both tokens and duration
+    tokens_per_second = None
+    if output_tokens > 0 and eval_duration_ns > 0:
+        eval_duration_seconds = eval_duration_ns / 1_000_000_000
+        tokens_per_second = output_tokens / eval_duration_seconds
+
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "eval_duration_ns": eval_duration_ns,
+        "tokens_per_second": tokens_per_second
+    }
+
+# Function to update model usage statistics
+def update_model_usage_stats(model_id, usage_info):
+    """
+    Update the usage statistics for a specific model.
+
+    Args:
+        model_id (str): The ID of the model
+        usage_info (dict): The usage information to add
+    """
+    if not usage_info:
+        return
+
+    # Find the model in selected_models
+    for model in st.session_state.selected_models:
+        if model["id"] == model_id:
+            # Initialize usage_stats if it doesn't exist
+            if "usage_stats" not in model:
+                model["usage_stats"] = {
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                    "total_eval_duration_ns": 0,
+                    "response_count": 0
+                }
+
+            # Update the statistics
+            model["usage_stats"]["total_input_tokens"] += usage_info["input_tokens"]
+            model["usage_stats"]["total_output_tokens"] += usage_info["output_tokens"]
+            model["usage_stats"]["total_eval_duration_ns"] += usage_info["eval_duration_ns"]
+            model["usage_stats"]["response_count"] += 1
+            break
 
 # Initialize session state for chat history if it doesn't exist
 if "messages" not in st.session_state:
@@ -131,6 +293,11 @@ def get_generator(model):
         region = config.get_provider_config("bedrock", "region", params.get("region", "us-east-1"))
         os.environ["AWS_REGION"] = region
 
+        # Create a copy of params without the cost information to avoid API errors
+        generation_params = params.copy()
+        if "cost" in generation_params:
+            del generation_params["cost"]
+
         # Create generator with streaming capability
         def streaming_callback(chunk):
             st.session_state[f"streaming_{model['id']}"].append(chunk.content)
@@ -138,13 +305,18 @@ def get_generator(model):
 
         return AmazonBedrockChatGenerator(
             model=model_name,
-            generation_kwargs=params,
+            generation_kwargs=generation_params,
             streaming_callback=streaming_callback
         )
 
     elif provider == "Ollama":
         # Extract Ollama-specific parameters with config fallback
         url = model.get("url", config.get_provider_config("ollama", "url", "http://localhost:11434"))
+
+        # Create a copy of params without the cost information to avoid potential API errors
+        generation_params = params.copy()
+        if "cost" in generation_params:
+            del generation_params["cost"]
 
         # Create generator with streaming capability
         def streaming_callback(chunk):
@@ -154,7 +326,8 @@ def get_generator(model):
         return OllamaChatGenerator(
             model=model_name,
             url=url,
-            generation_kwargs=params,
+            generation_kwargs=generation_params,
+            timeout=300,    # Longer timeout
             streaming_callback=streaming_callback
         )
 
@@ -167,11 +340,22 @@ st.title("💬 Haystack Multi-LLM Chat")
 with st.sidebar:
     st.title("Active Models")
 
+    # Add container so usage information can be added later
+    usage_container = st.empty()
+    with usage_container:
+        display_usage_statistics()
+
     for model in st.session_state.selected_models:
         with st.expander(f"{model['name']} ({model['provider']})"):
             # Show model parameters
             for key, value in model["params"].items():
                 st.write(f"**{key}:** {value}")
+            
+            # Show cost information if available
+            if "cost" in model:
+                st.write("**Cost Information:**")
+                for key, value in model["cost"].items():
+                    st.write(f"**{key}:** {value}")
 
             # Show provider-specific info
             if model["provider"] == "Ollama":
@@ -381,7 +565,18 @@ if prompt := st.chat_input("What would you like to ask? Help is available with /
                 response = generator.run(messages=user_and_selected_messages)
 
                 # Get the response message
-                response_text = response["replies"][0].text
+                response_message = response["replies"][0]  # This is a ChatMessage object
+                response_text = response_message.text
+
+                # Extract metadata from the response_message
+                metadata = response_message.meta or {}
+
+                # Extract token usage information
+                usage_info = extract_token_usage(metadata)
+
+                # Update model usage statistics
+                if usage_info:
+                    update_model_usage_stats(model_id, usage_info)
 
                 # Create metadata dictionary - all responses start as unselected
                 meta = {
@@ -391,14 +586,44 @@ if prompt := st.chat_input("What would you like to ask? Help is available with /
                     "model_id": model_id
                 }
 
+                # Add usage information to metadata if available
+                if usage_info:
+                    meta["usage_info"] = usage_info
+
                 # Create the message with metadata
-                response_message = ChatMessage.from_assistant(
+                chat_message = ChatMessage.from_assistant(
                     response_text,
                     meta=meta
                 )
 
                 # Add assistant response to chat history
-                st.session_state.messages.append(response_message)
+                st.session_state.messages.append(chat_message)
+
+                # Display usage statistics below the response if available
+                if usage_info:
+                    input_tokens = usage_info['input_tokens']
+                    output_tokens = usage_info['output_tokens']
+                    
+                    # Calculate costs for this response
+                    input_cost, output_cost, total_cost = calculate_cost(model_info, input_tokens, output_tokens)
+                    
+                    # Display token usage and speed
+                    caption_text = f"Input: {input_tokens} tokens | Output: {output_tokens} tokens"
+                    
+                    if usage_info["tokens_per_second"] is not None:
+                        caption_text += f" | Speed: {usage_info['tokens_per_second']:.2f} tokens/sec"
+                    
+                    # Add cost information if available
+                    if ("cost" in model_info and (
+                        model_info["cost"].get("input_token_cost", 0) > 0 or 
+                        model_info["cost"].get("output_token_cost", 0) > 0
+                    )) or ("params" in model_info and "cost" in model_info["params"] and (
+                        model_info["params"]["cost"].get("input_token_cost", 0) > 0 or 
+                        model_info["params"]["cost"].get("output_token_cost", 0) > 0
+                    )):
+                        caption_text += f" | Cost: ${total_cost:.4f}"
+                    
+                    st.caption(caption_text)
 
             except Exception as e:
                 error_message = f"Error generating response: {str(e)}"
@@ -409,6 +634,10 @@ if prompt := st.chat_input("What would you like to ask? Help is available with /
                         "Please try again by typing `/retry` in the chat input."
                     )
                 response_placeholder.error(error_message)
+
+    # Update usage statistics
+    with usage_container:
+        display_usage_statistics()
 
     # After all responses are generated, set flag to require selection
     if len(st.session_state.selected_models) > 1:  # Only require selection if we have multiple models
