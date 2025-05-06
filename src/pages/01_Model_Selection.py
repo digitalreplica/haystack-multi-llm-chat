@@ -105,7 +105,7 @@ if "reset_form" not in st.session_state:
     st.session_state.reset_form = False
 
 # Function to add a model to the selected list
-def add_model(provider, model_name, params):
+def add_model(provider, model_name, params, cost=None):
     # Create a unique ID for the model
     model_id = f"{provider}_{model_name}_{time.time()}"
 
@@ -116,6 +116,10 @@ def add_model(provider, model_name, params):
         "name": model_name,
         "params": params
     }
+
+    # Add cost information as a separate key if provided
+    if cost:
+        model_config["cost"] = cost
 
     # Add provider-specific parameters
     if provider == "Ollama":
@@ -199,6 +203,13 @@ with col1:
                 with st.expander("Model Parameters", expanded=True):
                     max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=default_max_tokens, step=100)
                     temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=default_temperature, step=0.1)
+                
+                # Cost parameters
+                with st.expander("Cost Parameters", expanded=True):
+                    st.caption("Set cost information for token usage calculation")
+                    cost_unit_count = st.number_input("Unit Count (tokens)", min_value=1, value=1000, help="Number of tokens per cost unit (typically 1000)")
+                    input_token_cost = st.number_input("Input Token Cost ($)", min_value=0.0, value=0.0, format="%.6f", help="Cost per unit of input tokens")
+                    output_token_cost = st.number_input("Output Token Cost ($)", min_value=0.0, value=0.0, format="%.6f", help="Cost per unit of output tokens")
 
                 # Add model button
                 if st.button("Add Model", type="primary"):
@@ -213,7 +224,13 @@ with col1:
                         "max_tokens": max_tokens,
                         "temperature": temperature
                     }
-                    add_model("AWS Bedrock", model_name, params)
+                    # Create cost object as a separate key
+                    cost = {
+                        "unit_count": cost_unit_count,
+                        "input_token_cost": input_token_cost,
+                        "output_token_cost": output_token_cost
+                    }
+                    add_model("AWS Bedrock", model_name, params, cost)
 
 
         elif provider == "Ollama":
@@ -257,6 +274,13 @@ with col1:
                         max_tokens = st.slider("Max Tokens", min_value=100, max_value=8000, value=default_max_tokens, step=100)
                         temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=default_temperature, step=0.1)
                         context_window = st.slider("Context Window Size", min_value=1000, max_value=128000, value=default_context_window, step=1000)
+                    
+                    # Cost parameters
+                    with st.expander("Cost Parameters", expanded=False):
+                        st.caption("Set cost information for token usage calculation")
+                        cost_unit_count = st.number_input("Unit Count (tokens)", min_value=1, value=1000, help="Number of tokens per cost unit (typically 1000)")
+                        input_token_cost = st.number_input("Input Token Cost ($)", min_value=0.0, value=0.0, format="%.6f", help="Cost per unit of input tokens")
+                        output_token_cost = st.number_input("Output Token Cost ($)", min_value=0.0, value=0.0, format="%.6f", help="Cost per unit of output tokens")
 
                     # Add model button
                     if st.button("Add Model", type="primary"):
@@ -275,7 +299,13 @@ with col1:
                             "temperature": temperature,
                             "num_ctx": context_window
                         }
-                        add_model("Ollama", model_name, {"url": ollama_url, "display_name": selected_display_name, **params})
+                        # Create cost object as a separate key
+                        cost = {
+                            "unit_count": cost_unit_count,
+                            "input_token_cost": input_token_cost,
+                            "output_token_cost": output_token_cost
+                        }
+                        add_model("Ollama", model_name, {"url": ollama_url, "display_name": selected_display_name, **params}, cost)
 
 # Right column - Selected models
 with col2:
@@ -300,6 +330,12 @@ with col2:
                     params_to_show = {k: v for k, v in model["params"].items() if k != "display_name"} if model["provider"] == "Ollama" else model["params"]
                     for key, value in params_to_show.items():
                         st.write(f"- {key}: {value}")
+                    
+                    # Display cost information if available
+                    if "cost" in model:
+                        st.write("Cost:")
+                        for key, value in model["cost"].items():
+                            st.write(f"- {key}: {value}")
 
                     # Display provider-specific info
                     if model["provider"] == "Ollama":
