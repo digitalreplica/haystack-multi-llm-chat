@@ -88,7 +88,8 @@ def get_bedrock_models(region="us-east-1"):
 
         # If no models found, return default
         if not chat_models:
-            return ["us.anthropic.claude-3-7-sonnet-20250219-v1:0"]
+            # return ["us.anthropic.claude-3-7-sonnet-20250219-v1:0"]
+            return ["us.anthropic.claude-sonnet-4-20250514-v1:0"] # - Claude Sonnet 4
 
         return chat_models
     except Exception as e:
